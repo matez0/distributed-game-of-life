@@ -7,11 +7,11 @@ class StreamSerializer:
     DIGITS_OF_ENCODED_DATA_LENGTH = 4
 
     @classmethod
-    async def send(self, writer: StreamWriter, data: Any) -> None:
+    async def send(cls, writer: StreamWriter, data: Any) -> None:
         serialized_obj = json.dumps(data).encode()
-        serialized_len = f"{len(serialized_obj):0{self.DIGITS_OF_ENCODED_DATA_LENGTH}x}".encode()
+        serialized_len = f"{len(serialized_obj):0{cls.DIGITS_OF_ENCODED_DATA_LENGTH}x}".encode()
 
-        if len(serialized_len) != self.DIGITS_OF_ENCODED_DATA_LENGTH:
+        if len(serialized_len) != cls.DIGITS_OF_ENCODED_DATA_LENGTH:
             raise ValueError("Object to send has invalid length")
 
         writer.write(serialized_len)
@@ -20,7 +20,7 @@ class StreamSerializer:
         await writer.drain()
 
     @classmethod
-    async def recv(self, reader: StreamReader) -> Any:
-        serialized_len = int((await reader.readexactly(self.DIGITS_OF_ENCODED_DATA_LENGTH)), base=16)
+    async def recv(cls, reader: StreamReader) -> Any:
+        serialized_len = int((await reader.readexactly(cls.DIGITS_OF_ENCODED_DATA_LENGTH)), base=16)
 
         return json.loads(await reader.readexactly(serialized_len))
