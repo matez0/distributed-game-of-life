@@ -29,4 +29,58 @@ class TestGolProcess(IsolatedAsyncioTestCase):
         ]
 
         with self.create_process(cells) as process:
-            self.assertEqual(await process.cells(), cells)
+            self.assertEqual(await process.cells(iteration=0), cells)
+
+    async def test_cells_with_less_than_2_alive_neighbours_shall_die(self):
+        cells = [
+            [1, 0, 0, 1],
+            [1, 0, 0, 0],
+            [0, 0, 0, 0],
+        ]
+
+        with self.create_process(cells) as process:
+            self.assertEqual(await process.cells(iteration=1), [[0] * 4] * 3)
+
+    async def test_alive_cells_with_2_or_3_alive_neighbours_shall_stay_alive(self):
+        cells = [
+            [0, 1, 1],
+            [1, 0, 1],
+            [0, 1, 0],
+        ]
+
+        with self.create_process(cells) as process:
+            self.assertEqual(await process.cells(iteration=1), cells)
+
+    async def test_alive_cells_with_more_than_3_alive_neighbours_shall_die(self):
+        cells = [
+            [1, 1, 1],
+            [1, 0, 1],
+            [1, 1, 1],
+        ]
+
+        with self.create_process(cells) as process:
+            self.assertEqual(
+                await process.cells(iteration=1),
+                [
+                    [1, 0, 1],
+                    [0, 0, 0],
+                    [1, 0, 1],
+                ],
+            )
+
+    async def test_dead_cells_with_3_alive_neighbours_shall_be_alive(self):
+        cells = [
+            [0, 1, 0],
+            [1, 0, 1],
+            [0, 0, 0],
+        ]
+
+        with self.create_process(cells) as process:
+            self.assertEqual(
+                await process.cells(iteration=1),
+                [
+                    [0, 1, 0],
+                    [0, 1, 0],
+                    [0, 0, 0],
+                ],
+            )
