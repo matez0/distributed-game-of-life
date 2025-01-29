@@ -4,6 +4,7 @@ from asyncio import StreamReader, StreamWriter
 from multiprocessing import Event, Process, Value
 from typing import Any
 
+from dgol.cells import GolCells
 from dgol.stream import StreamSerializer
 
 
@@ -15,7 +16,7 @@ class GolProcess(Process):
         self.cells_server_port = Value("i", 0)
 
         self.iteration = 0
-        self._cells = cells or [[]]
+        self._cells = GolCells(cells or [[]])
         self.cells_server_started = Event()
 
         self.start()
@@ -35,9 +36,10 @@ class GolProcess(Process):
         iteration = await StreamSerializer.recv(reader)
 
         while self.iteration < iteration:
-            self._iterate()
+            self._cells.iterate()
+            self.iteration += 1
 
-        await StreamSerializer.send(writer, self._cells)
+        await StreamSerializer.send(writer, self._cells.as_serializable)
 
         writer.close()
         await writer.wait_closed()
@@ -53,26 +55,3 @@ class GolProcess(Process):
         await writer.wait_closed()
 
         return result
-
-    def _iterate(self) -> None:
-        self._cells = [
-            [
-                0 if (neighbors := self._neighbors(row, column)) < 2 or neighbors > 3 else
-                1 if neighbors == 3 else cell
-                for column, cell in enumerate(cell_row)
-            ]
-            for row, cell_row in enumerate(self._cells)
-        ]
-        self.iteration += 1
-
-    def _neighbors(self, row: int, column: int) -> int:
-        row_len = len(self._cells[0])
-        row_num = len(self._cells)
-
-        return sum(
-            self._cells[_row][_column]
-            for _row in range(row - 1, row + 2) if 0 <= _row < row_num
-            for _column in range(column - 1, column + 2) if 0 <= _column < row_len and (
-                _column != column or _row != row
-            )
-        )
