@@ -1,5 +1,4 @@
 import asyncio
-import json
 from asyncio import StreamReader, StreamWriter
 from multiprocessing import Event, Process, Value
 from typing import Any
