@@ -34,16 +34,17 @@ class GolProcess(Process):
     async def _send_cells(self, reader: StreamReader, writer: StreamWriter) -> None:
         iteration = await StreamSerializer.recv(reader)
 
-        while self.iteration < iteration:
-            self._cells.iterate()
-            self.iteration += 1
+        if iteration:
+            while self.iteration < iteration:
+                self._cells.iterate()
+                self.iteration += 1
 
         await StreamSerializer.send(writer, self._cells.as_serializable)
 
         writer.close()
         await writer.wait_closed()
 
-    async def cells(self, iteration: int) -> Any:
+    async def cells(self, iteration: int | None = None) -> Any:
         reader, writer = await asyncio.open_connection(self.host, self.cells_server_port.value)
 
         await StreamSerializer.send(writer, iteration)

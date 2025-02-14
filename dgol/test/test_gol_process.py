@@ -29,7 +29,7 @@ class TestGolProcess(IsolatedAsyncioTestCase):
         ]
 
         with self.create_process(cells) as process:
-            self.assertEqual(await process.cells(iteration=0), cells)
+            self.assertEqual(await process.cells(), cells)
 
     async def test_cells_can_iterate(self):
         cells = [
