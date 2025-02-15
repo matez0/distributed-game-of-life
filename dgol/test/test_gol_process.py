@@ -2,7 +2,7 @@ from contextlib import contextmanager
 from multiprocessing import Process
 from typing import Any, Generator, Optional
 from unittest import IsolatedAsyncioTestCase
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from dgol.process import GolProcess
 
@@ -71,3 +71,12 @@ class TestGolProcess(IsolatedAsyncioTestCase):
                 [[iteration]]
             )
             gol_cells_ctor.assert_called_once_with(cells)
+
+    def test_gol_processes_can_be_connected(self):
+        other_process = Mock(spec=GolProcess, border_port=123)
+
+        with self.create_process([[0]]) as process, patch.object(process, "_add_neighbour") as add_neighbour:
+            process.connect(other_process, GolProcess.Direction.UP)
+
+            add_neighbour.assert_called_once_with(GolProcess.Direction.UP, other_process.border_port)
+            other_process._add_neighbour.assert_called_once_with(GolProcess.Direction.DOWN, process.border_port)

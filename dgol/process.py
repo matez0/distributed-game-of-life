@@ -1,18 +1,24 @@
 import asyncio
 from asyncio import StreamReader, StreamWriter
+from enum import Enum, auto
 from multiprocessing import Event, Process, Value
-from typing import Any
+from typing import Any, Self
 
 from dgol.cells import GolCells
 from dgol.stream import StreamSerializer
 
 
 class GolProcess(Process):
+    class Direction(Enum):
+        UP = auto()
+        DOWN = auto()
+
     def __init__(self, cells: list[list[int]] | None = None):
         super().__init__()
 
         self.host = "127.0.0.1"
         self.cells_server_port = Value("i", 0)
+        self.border_port = Value("i", 0)
 
         self.iteration = 0
         self._cells = GolCells(cells or [[]])
@@ -20,6 +26,14 @@ class GolProcess(Process):
 
         self.start()
         self.cells_server_started.wait()
+
+    def connect(self, other: Self, direction: Direction):
+        self._add_neighbour(direction, other.border_port)
+        opposite_direction = self.Direction.DOWN if direction == self.Direction.UP else self.Direction.UP
+        other._add_neighbour(opposite_direction, self.border_port)
+
+    def _add_neighbour(self, direction: Direction, border_port: Any) -> None:
+        pass
 
     def run(self) -> None:
         asyncio.run(self.arun())
