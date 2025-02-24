@@ -80,3 +80,14 @@ class TestGolProcess(IsolatedAsyncioTestCase):
 
             add_neighbour.assert_called_once_with(GolProcess.Direction.UP, other_process.border_port)
             other_process._add_neighbour.assert_called_once_with(GolProcess.Direction.DOWN, process.border_port)
+
+    def test_opposite_directions(self):
+        for direction, opposite in [
+            (GolProcess.Direction.UP, GolProcess.Direction.DOWN),
+            (GolProcess.Direction.UPRIGHT, GolProcess.Direction.DOWNLEFT),
+            (GolProcess.Direction.RIGHT, GolProcess.Direction.LEFT),
+            (GolProcess.Direction.DOWNRIGHT, GolProcess.Direction.UPLEFT),
+        ]:
+            with self.subTest(directions=(direction.name, opposite.name)):
+                self.assertEqual(direction.opposite, opposite)
+                self.assertEqual(opposite.opposite, direction)

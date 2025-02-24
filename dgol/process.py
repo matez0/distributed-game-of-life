@@ -11,12 +11,21 @@ from dgol.stream import StreamSerializer
 class GolProcess(Process):
     class Direction(Enum):
         UP = auto()
+        UPRIGHT = auto()
+        RIGHT = auto()
+        DOWNRIGHT = auto()
         DOWN = auto()
+        DOWNLEFT = auto()
+        LEFT = auto()
+        UPLEFT = auto()
 
         @property
         def opposite(self) -> Self:
             opposites = [
                 (self.UP, self.DOWN),
+                (self.UPRIGHT, self.DOWNLEFT),
+                (self.RIGHT, self.LEFT),
+                (self.DOWNRIGHT, self.UPLEFT),
             ]
             return cast(dict[Self, Self], dict(opposites + [(other, one) for one, other in opposites]))[self]
 
