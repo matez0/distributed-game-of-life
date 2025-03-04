@@ -1,7 +1,7 @@
 import asyncio
 from asyncio import StreamReader, StreamWriter
 from enum import Enum, auto
-from multiprocessing import Event, Process, Value
+from multiprocessing import Event, Manager, Process, Value
 from typing import Any, Self, cast
 
 from dgol.cells import GolCells
@@ -35,10 +35,13 @@ class GolProcess(Process):
         self.host = "127.0.0.1"
         self.cells_server_port = Value("i", 0)
         self.border_port = Value("i", 0)
+        self.neighbours = Manager().dict()
 
         self.iteration = 0
         self._cells = GolCells(cells or [[]])
         self.cells_server_started = Event()
+
+        self.is_border_sent = False
 
         self.start()
         self.cells_server_started.wait()
@@ -48,17 +51,44 @@ class GolProcess(Process):
         other._add_neighbour(direction.opposite, self.border_port)
 
     def _add_neighbour(self, direction: Direction, border_port: Any) -> None:
-        pass
+        self.neighbours[direction] = border_port
 
     def run(self) -> None:
         asyncio.run(self.arun())
 
     async def arun(self) -> None:
+        border_server = await asyncio.start_server(self._receive_border, self.host, 0)
+        self.border_port.value = border_server.sockets[0].getsockname()[1]
+
         cells_server = await asyncio.start_server(self._send_cells, self.host, 0)
         self.cells_server_port.value = cells_server.sockets[0].getsockname()[1]
         self.cells_server_started.set()
 
-        await cells_server.serve_forever()
+        async with asyncio.TaskGroup() as task_group:
+            task_group.create_task(border_server.serve_forever())
+            task_group.create_task(cells_server.serve_forever())
+
+    async def _receive_border(self, reader: StreamReader, writer: StreamWriter) -> None:
+        await StreamSerializer.recv(reader)
+
+        if not self.is_border_sent:
+            await self._send_border()
+
+        await StreamSerializer.send(writer, "received")
+
+        writer.close()
+        await writer.wait_closed()
+
+    async def _send_border(self) -> None:
+        for direction, border_port in self.neighbours.items():
+            _, writer = await asyncio.open_connection(self.host, border_port)
+
+            await StreamSerializer.send(writer, {direction.opposite.name: "border"})
+
+            writer.close()
+            await writer.wait_closed()
+
+        self.is_border_sent = True
 
     async def _send_cells(self, reader: StreamReader, writer: StreamWriter) -> None:
         iteration = await StreamSerializer.recv(reader)

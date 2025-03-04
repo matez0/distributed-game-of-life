@@ -1,10 +1,12 @@
-from contextlib import contextmanager
+import asyncio
+from contextlib import asynccontextmanager, contextmanager
 from multiprocessing import Process
-from typing import Any, Generator, Optional
+from typing import Any, AsyncGenerator, Generator, Optional
 from unittest import IsolatedAsyncioTestCase
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 from dgol.process import GolProcess
+from dgol.stream import StreamSerializer
 
 
 class TestGolProcess(IsolatedAsyncioTestCase):
@@ -16,6 +18,25 @@ class TestGolProcess(IsolatedAsyncioTestCase):
 
         finally:
             process.terminate()
+
+    @asynccontextmanager
+    async def create_neighbour(self) -> AsyncGenerator[AsyncMock, None]:
+        neighbour = AsyncMock(spec=GolProcess, receive_border=AsyncMock(), host="127.0.0.1")
+
+        async with await asyncio.start_server(neighbour.receive_border, neighbour.host, 0) as border_server:
+            neighbour.border_port = border_server.sockets[0].getsockname()[1]
+
+            yield neighbour
+
+    async def send_border_to(self, process: GolProcess, border: dict[str, Any]) -> None:
+        reader, writer = await asyncio.open_connection(process.host, process.border_port.value)
+
+        await StreamSerializer.send(writer, border)
+
+        self.assertEqual(await StreamSerializer.recv(reader), "received")
+
+        writer.close()
+        await writer.wait_closed()
 
     def test_shall_be_a_process_instance(self):
         with self.create_process() as process:
@@ -91,3 +112,27 @@ class TestGolProcess(IsolatedAsyncioTestCase):
             with self.subTest(directions=(direction.name, opposite.name)):
                 self.assertEqual(direction.opposite, opposite)
                 self.assertEqual(opposite.opposite, direction)
+
+    async def test_receiving_border_info_triggers_sending_border_once(self):
+        direction_1 = GolProcess.Direction.UP
+        direction_2 = GolProcess.Direction.RIGHT
+
+        def assert_received_border_from(direction):
+            async def assert_received_border(reader, *args):
+                self.assertEqual(await StreamSerializer.recv(reader), {direction.opposite.name: "border"})
+
+            return assert_received_border
+
+        async with self.create_neighbour() as neighbour_1, self.create_neighbour() as neighbour_2:
+            neighbour_1.receive_border.side_effect = assert_received_border_from(direction_1)
+            neighbour_2.receive_border.side_effect = assert_received_border_from(direction_2)
+
+            with self.create_process([[0]]) as process:
+                process.connect(neighbour_1, direction_1)
+                process.connect(neighbour_2, direction_2)
+
+                await self.send_border_to(process, {"LEFT": "border"})
+                await self.send_border_to(process, {"RIGHT": "border"})
+
+            neighbour_1.receive_border.assert_awaited_once()
+            neighbour_2.receive_border.assert_awaited_once()
