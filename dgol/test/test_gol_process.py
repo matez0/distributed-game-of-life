@@ -1,5 +1,5 @@
 import asyncio
-from contextlib import asynccontextmanager, contextmanager
+from contextlib import asynccontextmanager, closing, contextmanager
 from multiprocessing import Process
 from typing import Any, AsyncGenerator, Generator, Optional
 from unittest import IsolatedAsyncioTestCase
@@ -118,8 +118,9 @@ class TestGolProcess(IsolatedAsyncioTestCase):
         direction_2 = GolProcess.Direction.RIGHT
 
         def assert_received_border_from(direction):
-            async def assert_received_border(reader, *args):
-                self.assertEqual(await StreamSerializer.recv(reader), {direction.opposite.name: "border"})
+            async def assert_received_border(reader, writer):
+                with closing(writer):
+                    self.assertEqual(await StreamSerializer.recv(reader), {direction.opposite.name: "border"})
 
             return assert_received_border
 
