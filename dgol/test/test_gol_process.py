@@ -9,6 +9,17 @@ from dgol.process import GolProcess
 from dgol.stream import StreamSerializer
 
 
+class GolCellsStubToGetIteration:
+    iteration_counter = 0
+
+    def iterate(self) -> None:
+        self.iteration_counter += 1
+
+    @property
+    def as_serializable(self) -> list[list[int]]:
+        return [[self.iteration_counter]]
+
+
 class TestGolProcess(IsolatedAsyncioTestCase):
     @contextmanager
     def create_process(self, cells: Optional[Any] = None) -> Generator[GolProcess, None, None]:
@@ -21,7 +32,10 @@ class TestGolProcess(IsolatedAsyncioTestCase):
 
     @asynccontextmanager
     async def create_neighbour(self) -> AsyncGenerator[AsyncMock, None]:
-        neighbour = AsyncMock(spec=GolProcess, receive_border=AsyncMock(), host="127.0.0.1")
+        def close_writer(reader, writer):
+            writer.close()
+
+        neighbour = AsyncMock(spec=GolProcess, receive_border=AsyncMock(side_effect=close_writer), host="127.0.0.1")
 
         async with await asyncio.start_server(neighbour.receive_border, neighbour.host, 0) as border_server:
             neighbour.border_port = border_server.sockets[0].getsockname()[1]
@@ -74,17 +88,7 @@ class TestGolProcess(IsolatedAsyncioTestCase):
         cells = [[0]]
         iteration = 6
 
-        class GolCellsStub:
-            iteration_counter = 0
-
-            def iterate(self) -> None:
-                self.iteration_counter += 1
-
-            @property
-            def as_serializable(self) -> list[list[int]]:
-                return [[self.iteration_counter]]
-
-        gol_cells_ctor.return_value = GolCellsStub()
+        gol_cells_ctor.return_value = GolCellsStubToGetIteration()
 
         with self.create_process(cells) as process:
             self.assertEqual(
@@ -137,3 +141,43 @@ class TestGolProcess(IsolatedAsyncioTestCase):
 
             neighbour_1.receive_border.assert_awaited_once()
             neighbour_2.receive_border.assert_awaited_once()
+
+    @patch("dgol.process.GolCells", spec=True)
+    async def test_receiving_border_info_from_all_neighbour_triggers_iteration(self, gol_cells_ctor: Mock):
+        gol_cells_ctor.return_value = GolCellsStubToGetIteration()
+
+        direction_1 = GolProcess.Direction.UP
+        direction_2 = GolProcess.Direction.RIGHT
+
+        async with self.create_neighbour() as neighbour_1, self.create_neighbour() as neighbour_2:
+            with self.create_process([[8, 9]]) as process:
+                process.connect(neighbour_1, direction_1)
+                process.connect(neighbour_2, direction_2)
+
+                await self.send_border_to(process, {direction_1.name: "border"})
+
+                self.assertEqual(await process.cells(), [[0]])
+
+                await self.send_border_to(process, {direction_2.name: "border"})
+
+                self.assertEqual(await process.cells(), [[1]])
+
+    @patch("dgol.process.GolCells", spec=True)
+    async def test_sending_border_can_be_triggered_again_after_iteration(self, gol_cells_ctor: Mock):
+        gol_cells_ctor.return_value = GolCellsStubToGetIteration()
+
+        direction = GolProcess.Direction.UP
+
+        async with self.create_neighbour() as neighbour:
+            with self.create_process([[8, 9]]) as process:
+                process.connect(neighbour, direction)
+
+                await self.send_border_to(process, {direction.name: "border"})
+
+                self.assertEqual(await process.cells(), [[1]])
+
+                await self.send_border_to(process, {direction.name: "border"})
+
+                self.assertEqual(await process.cells(), [[2]])
+
+            self.assertEqual(neighbour.receive_border.await_count, 2)
