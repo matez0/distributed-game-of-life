@@ -72,6 +72,8 @@ class GolProcess(Process):
         await StreamSerializer.recv(reader)
 
         if not self.is_border_sent:
+            self.is_border_sent = True
+
             await self._send_border()
 
         await StreamSerializer.send(writer, "received")
@@ -87,8 +89,6 @@ class GolProcess(Process):
 
             writer.close()
             await writer.wait_closed()
-
-        self.is_border_sent = True
 
     async def _send_cells(self, reader: StreamReader, writer: StreamWriter) -> None:
         iteration = await StreamSerializer.recv(reader)
