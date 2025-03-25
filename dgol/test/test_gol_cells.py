@@ -1,6 +1,6 @@
 from unittest import TestCase
 
-from dgol.cells import GolCells
+from dgol.cells import Direction, GolCells
 
 
 class TestGolCells(TestCase):
@@ -85,3 +85,76 @@ class TestGolCells(TestCase):
                 [0, 0, 0],
             ],
         )
+
+    def test_neighboring_borders_are_tanken_into_account(self):
+        cases = [
+            (
+                "alive corners",
+                {
+                    Direction.UPRIGHT: [1],
+                    Direction.DOWNRIGHT: [1],
+                    Direction.DOWNLEFT: [1],
+                    Direction.UPLEFT: [1],
+                },
+                [
+                    [1, 0, 1],
+                    [0, 1, 0],
+                    [1, 0, 1],
+                ],
+                [
+                    [1, 1, 1],
+                    [1, 0, 1],
+                    [1, 1, 1],
+                ],
+            ),
+            (
+                "alive sides",
+                {
+                    Direction.UP: [1, 1, 1],
+                    Direction.RIGHT: [1, 1, 1],
+                    Direction.DOWN: [1, 1, 1],
+                    Direction.LEFT: [1, 1, 1],
+                },
+                [
+                    [0, 0, 0],
+                    [0, 0, 0],
+                    [0, 0, 0],
+                ],
+                [
+                    [0, 1, 0],
+                    [1, 0, 1],
+                    [0, 1, 0],
+                ],
+            ),
+            (
+                "alive around corners",
+                {
+                    Direction.UP: [1, 0, 1],
+                    Direction.UPRIGHT: [1],
+                    Direction.RIGHT: [1, 0, 1],
+                    Direction.DOWNRIGHT: [1],
+                    Direction.DOWN: [1, 0, 1],
+                    Direction.DOWNLEFT: [1],
+                    Direction.LEFT: [1, 0, 1],
+                    Direction.UPLEFT: [1],
+                },
+                [
+                    [0, 0, 0],
+                    [0, 0, 0],
+                    [0, 0, 0],
+                ],
+                [
+                    [1, 0, 1],
+                    [0, 0, 0],
+                    [1, 0, 1],
+                ],
+            ),
+        ]
+
+        for description, neighboring_borders, initial_cells, iterated_cells in cases:
+            with self.subTest(case=description):
+                cells = GolCells(initial_cells)
+
+                cells.iterate(neighboring_borders=neighboring_borders)
+
+                self.assertEqual(cells.as_serializable, iterated_cells)

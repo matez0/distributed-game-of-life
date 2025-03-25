@@ -31,8 +31,8 @@ class GolCells:
     def as_serializable(self) -> list[list[int]]:
         return self._cells
 
-    def iterate(self) -> None:
-        self._extend_with_neighboring_border_cells()
+    def iterate(self, neighboring_borders: dict[Direction, list[int]] | None = None) -> None:
+        self._extend_with_neighboring_border_cells(neighboring_borders or {})
 
         self._cells = [
             [
@@ -43,15 +43,26 @@ class GolCells:
             for row, cell_row in enumerate(self._cells[1:-1], start=1)
         ]
 
-    def _extend_with_neighboring_border_cells(self) -> None:
-        for cell_row in self._cells:
-            cell_row.insert(0, 0)
-            cell_row.append(0)
+    def _extend_with_neighboring_border_cells(self, neighboring_borders: dict[Direction, list[int]]) -> None:
+        left_border = neighboring_borders.get(Direction.LEFT, [0] * len(self._cells))
+        right_border = neighboring_borders.get(Direction.RIGHT, [0] * len(self._cells))
+        upper_border_row = (
+            neighboring_borders.get(Direction.UPLEFT, [0])
+            + neighboring_borders.get(Direction.UP, [0] * len(self._cells[0]))
+            + neighboring_borders.get(Direction.UPRIGHT, [0])
+        )
+        down_border_row = (
+            neighboring_borders.get(Direction.DOWNLEFT, [0])
+            + neighboring_borders.get(Direction.DOWN, [0] * len(self._cells[0]))
+            + neighboring_borders.get(Direction.DOWNRIGHT, [0])
+        )
 
-        border_row = len(self._cells[0]) * [0]
+        for cell_row, left_border_cell, right_border_cell in zip(self._cells, left_border, right_border):
+            cell_row.insert(0, left_border_cell)
+            cell_row.append(right_border_cell)
 
-        self._cells.insert(0, border_row)
-        self._cells.append(border_row)
+        self._cells.insert(0, upper_border_row)
+        self._cells.append(down_border_row)
 
     def _neighbors(self, row: int, column: int) -> int:
         """Must only be called for the internal cells of the border extended cell matrix."""
