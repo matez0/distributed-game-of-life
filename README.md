@@ -8,10 +8,10 @@ The cellular space is distributed across interconnected Game of Life processes.
 In the first step, Game of Life processes will be represented by operating system processes.
 
 The iterations are triggered by interacting with one process
-and this process triggers the iteration of each neighbour by sending the border cells.
-A process is triggered to iterate when each neighbour sends its border cells to it.
-When a process receives border cells from one of its neighbours,
-it sends its own border cells to all neighbours once before each iteration.
+and this process triggers the iteration of each neighbor by sending the border cells.
+A process is triggered to iterate when each neighbor sends its border cells to it.
+When a process receives border cells from one of its neighbors,
+it sends its own border cells to all neighbors once before each iteration.
 
 ## Testing
 

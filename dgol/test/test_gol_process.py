@@ -31,16 +31,16 @@ class TestGolProcess(IsolatedAsyncioTestCase):
             process.terminate()
 
     @asynccontextmanager
-    async def create_neighbour(self) -> AsyncGenerator[AsyncMock, None]:
+    async def create_neighbor(self) -> AsyncGenerator[AsyncMock, None]:
         def close_writer(reader, writer):
             writer.close()
 
-        neighbour = AsyncMock(spec=GolProcess, receive_border=AsyncMock(side_effect=close_writer), host="127.0.0.1")
+        neighbor = AsyncMock(spec=GolProcess, receive_border=AsyncMock(side_effect=close_writer), host="127.0.0.1")
 
-        async with await asyncio.start_server(neighbour.receive_border, neighbour.host, 0) as border_server:
-            neighbour.border_port = border_server.sockets[0].getsockname()[1]
+        async with await asyncio.start_server(neighbor.receive_border, neighbor.host, 0) as border_server:
+            neighbor.border_port = border_server.sockets[0].getsockname()[1]
 
-            yield neighbour
+            yield neighbor
 
     async def send_border_to(self, process: GolProcess, border: dict[str, Any]) -> None:
         reader, writer = await asyncio.open_connection(process.host, process.border_port.value)
@@ -100,11 +100,11 @@ class TestGolProcess(IsolatedAsyncioTestCase):
     def test_gol_processes_can_be_connected(self):
         other_process = Mock(spec=GolProcess, border_port=123)
 
-        with self.create_process([[0]]) as process, patch.object(process, "_add_neighbour") as add_neighbour:
+        with self.create_process([[0]]) as process, patch.object(process, "_add_neighbor") as add_neighbor:
             process.connect(other_process, GolProcess.Direction.UP)
 
-            add_neighbour.assert_called_once_with(GolProcess.Direction.UP, other_process.border_port)
-            other_process._add_neighbour.assert_called_once_with(GolProcess.Direction.DOWN, process.border_port)
+            add_neighbor.assert_called_once_with(GolProcess.Direction.UP, other_process.border_port)
+            other_process._add_neighbor.assert_called_once_with(GolProcess.Direction.DOWN, process.border_port)
 
     def test_opposite_directions(self):
         for direction, opposite in [
@@ -128,31 +128,31 @@ class TestGolProcess(IsolatedAsyncioTestCase):
 
             return assert_received_border
 
-        async with self.create_neighbour() as neighbour_1, self.create_neighbour() as neighbour_2:
-            neighbour_1.receive_border.side_effect = assert_received_border_from(direction_1)
-            neighbour_2.receive_border.side_effect = assert_received_border_from(direction_2)
+        async with self.create_neighbor() as neighbor_1, self.create_neighbor() as neighbor_2:
+            neighbor_1.receive_border.side_effect = assert_received_border_from(direction_1)
+            neighbor_2.receive_border.side_effect = assert_received_border_from(direction_2)
 
             with self.create_process([[0]]) as process:
-                process.connect(neighbour_1, direction_1)
-                process.connect(neighbour_2, direction_2)
+                process.connect(neighbor_1, direction_1)
+                process.connect(neighbor_2, direction_2)
 
                 await self.send_border_to(process, {"LEFT": "border"})
                 await self.send_border_to(process, {"RIGHT": "border"})
 
-            neighbour_1.receive_border.assert_awaited_once()
-            neighbour_2.receive_border.assert_awaited_once()
+            neighbor_1.receive_border.assert_awaited_once()
+            neighbor_2.receive_border.assert_awaited_once()
 
     @patch("dgol.process.GolCells", spec=True)
-    async def test_receiving_border_info_from_all_neighbour_triggers_iteration(self, gol_cells_ctor: Mock):
+    async def test_receiving_border_info_from_all_neighbor_triggers_iteration(self, gol_cells_ctor: Mock):
         gol_cells_ctor.return_value = GolCellsStubToGetIteration()
 
         direction_1 = GolProcess.Direction.UP
         direction_2 = GolProcess.Direction.RIGHT
 
-        async with self.create_neighbour() as neighbour_1, self.create_neighbour() as neighbour_2:
+        async with self.create_neighbor() as neighbor_1, self.create_neighbor() as neighbor_2:
             with self.create_process([[8, 9]]) as process:
-                process.connect(neighbour_1, direction_1)
-                process.connect(neighbour_2, direction_2)
+                process.connect(neighbor_1, direction_1)
+                process.connect(neighbor_2, direction_2)
 
                 await self.send_border_to(process, {direction_1.name: "border"})
 
@@ -168,9 +168,9 @@ class TestGolProcess(IsolatedAsyncioTestCase):
 
         direction = GolProcess.Direction.UP
 
-        async with self.create_neighbour() as neighbour:
+        async with self.create_neighbor() as neighbor:
             with self.create_process([[8, 9]]) as process:
-                process.connect(neighbour, direction)
+                process.connect(neighbor, direction)
 
                 await self.send_border_to(process, {direction.name: "border"})
 
@@ -180,4 +180,4 @@ class TestGolProcess(IsolatedAsyncioTestCase):
 
                 self.assertEqual(await process.cells(), [[2]])
 
-            self.assertEqual(neighbour.receive_border.await_count, 2)
+            self.assertEqual(neighbor.receive_border.await_count, 2)

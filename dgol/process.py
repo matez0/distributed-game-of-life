@@ -35,8 +35,8 @@ class GolProcess(Process):
         self.host = "127.0.0.1"
         self.cells_server_port = Value("i", 0)
         self.border_port = Value("i", 0)
-        self.neighbours = Manager().dict()
-        self.neighbour_borders: dict[GolProcess.Direction, list[list[int]]] = {}
+        self.neighbors = Manager().dict()
+        self.neighbor_borders: dict[GolProcess.Direction, list[list[int]]] = {}
 
         self.iteration = 0
         self._cells = GolCells(cells or [[]])
@@ -48,11 +48,11 @@ class GolProcess(Process):
         self.cells_server_started.wait()
 
     def connect(self, other: Self, direction: Direction):
-        self._add_neighbour(direction, other.border_port)
-        other._add_neighbour(direction.opposite, self.border_port)
+        self._add_neighbor(direction, other.border_port)
+        other._add_neighbor(direction.opposite, self.border_port)
 
-    def _add_neighbour(self, direction: Direction, border_port: Any) -> None:
-        self.neighbours[direction] = border_port
+    def _add_neighbor(self, direction: Direction, border_port: Any) -> None:
+        self.neighbors[direction] = border_port
 
     def run(self) -> None:
         asyncio.run(self.arun())
@@ -70,7 +70,7 @@ class GolProcess(Process):
             task_group.create_task(cells_server.serve_forever())
 
     async def _receive_border(self, reader: StreamReader, writer: StreamWriter) -> None:
-        self.neighbour_borders.update(
+        self.neighbor_borders.update(
             {
                 self.Direction[direction]: border_info
                 for direction, border_info in (await StreamSerializer.recv(reader)).items()
@@ -82,10 +82,10 @@ class GolProcess(Process):
 
             await self._send_border()
 
-        if set(self.neighbour_borders.keys()) == set(self.neighbours.keys()):
+        if set(self.neighbor_borders.keys()) == set(self.neighbors.keys()):
             self._cells.iterate()
             self.iteration += 1
-            self.neighbour_borders = {}
+            self.neighbor_borders = {}
             self.is_border_sent = False
 
         await StreamSerializer.send(writer, "received")
@@ -94,7 +94,7 @@ class GolProcess(Process):
         await writer.wait_closed()
 
     async def _send_border(self) -> None:
-        for direction, border_port in self.neighbours.items():
+        for direction, border_port in self.neighbors.items():
             _, writer = await asyncio.open_connection(self.host, border_port)
 
             await StreamSerializer.send(writer, {direction.opposite.name: "border"})
