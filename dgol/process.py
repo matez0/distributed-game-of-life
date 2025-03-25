@@ -1,34 +1,13 @@
 import asyncio
 from asyncio import StreamReader, StreamWriter
-from enum import Enum, auto
 from multiprocessing import Event, Manager, Process, Value
 from typing import Any, Self, cast
 
-from dgol.cells import GolCells
+from dgol.cells import Direction, GolCells
 from dgol.stream import StreamSerializer
 
 
 class GolProcess(Process):
-    class Direction(Enum):
-        UP = auto()
-        UPRIGHT = auto()
-        RIGHT = auto()
-        DOWNRIGHT = auto()
-        DOWN = auto()
-        DOWNLEFT = auto()
-        LEFT = auto()
-        UPLEFT = auto()
-
-        @property
-        def opposite(self) -> Self:
-            opposites = [
-                (self.UP, self.DOWN),
-                (self.UPRIGHT, self.DOWNLEFT),
-                (self.RIGHT, self.LEFT),
-                (self.DOWNRIGHT, self.UPLEFT),
-            ]
-            return cast(dict[Self, Self], dict(opposites + [(other, one) for one, other in opposites]))[self]
-
     def __init__(self, cells: list[list[int]] | None = None):
         super().__init__()
 
@@ -36,7 +15,7 @@ class GolProcess(Process):
         self.cells_server_port = Value("i", 0)
         self.border_port = Value("i", 0)
         self.neighbors = Manager().dict()
-        self.neighbor_borders: dict[GolProcess.Direction, list[list[int]]] = {}
+        self.neighbor_borders: dict[Direction, list[list[int]]] = {}
 
         self.iteration = 0
         self._cells = GolCells(cells or [[]])
@@ -72,7 +51,7 @@ class GolProcess(Process):
     async def _receive_border(self, reader: StreamReader, writer: StreamWriter) -> None:
         self.neighbor_borders.update(
             {
-                self.Direction[direction]: border_info
+                Direction[direction]: border_info
                 for direction, border_info in (await StreamSerializer.recv(reader)).items()
             }
         )

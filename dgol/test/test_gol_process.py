@@ -5,6 +5,7 @@ from typing import Any, AsyncGenerator, Generator, Optional
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock, Mock, patch
 
+from dgol.cells import Direction
 from dgol.process import GolProcess
 from dgol.stream import StreamSerializer
 
@@ -101,25 +102,25 @@ class TestGolProcess(IsolatedAsyncioTestCase):
         other_process = Mock(spec=GolProcess, border_port=123)
 
         with self.create_process([[0]]) as process, patch.object(process, "_add_neighbor") as add_neighbor:
-            process.connect(other_process, GolProcess.Direction.UP)
+            process.connect(other_process, Direction.UP)
 
-            add_neighbor.assert_called_once_with(GolProcess.Direction.UP, other_process.border_port)
-            other_process._add_neighbor.assert_called_once_with(GolProcess.Direction.DOWN, process.border_port)
+            add_neighbor.assert_called_once_with(Direction.UP, other_process.border_port)
+            other_process._add_neighbor.assert_called_once_with(Direction.DOWN, process.border_port)
 
     def test_opposite_directions(self):
         for direction, opposite in [
-            (GolProcess.Direction.UP, GolProcess.Direction.DOWN),
-            (GolProcess.Direction.UPRIGHT, GolProcess.Direction.DOWNLEFT),
-            (GolProcess.Direction.RIGHT, GolProcess.Direction.LEFT),
-            (GolProcess.Direction.DOWNRIGHT, GolProcess.Direction.UPLEFT),
+            (Direction.UP, Direction.DOWN),
+            (Direction.UPRIGHT, Direction.DOWNLEFT),
+            (Direction.RIGHT, Direction.LEFT),
+            (Direction.DOWNRIGHT, Direction.UPLEFT),
         ]:
             with self.subTest(directions=(direction.name, opposite.name)):
                 self.assertEqual(direction.opposite, opposite)
                 self.assertEqual(opposite.opposite, direction)
 
     async def test_receiving_border_info_triggers_sending_border_once(self):
-        direction_1 = GolProcess.Direction.UP
-        direction_2 = GolProcess.Direction.RIGHT
+        direction_1 = Direction.UP
+        direction_2 = Direction.RIGHT
 
         def assert_received_border_from(direction):
             async def assert_received_border(reader, writer):
@@ -146,8 +147,8 @@ class TestGolProcess(IsolatedAsyncioTestCase):
     async def test_receiving_border_info_from_all_neighbor_triggers_iteration(self, gol_cells_ctor: Mock):
         gol_cells_ctor.return_value = GolCellsStubToGetIteration()
 
-        direction_1 = GolProcess.Direction.UP
-        direction_2 = GolProcess.Direction.RIGHT
+        direction_1 = Direction.UP
+        direction_2 = Direction.RIGHT
 
         async with self.create_neighbor() as neighbor_1, self.create_neighbor() as neighbor_2:
             with self.create_process([[8, 9]]) as process:
@@ -166,7 +167,7 @@ class TestGolProcess(IsolatedAsyncioTestCase):
     async def test_sending_border_can_be_triggered_again_after_iteration(self, gol_cells_ctor: Mock):
         gol_cells_ctor.return_value = GolCellsStubToGetIteration()
 
-        direction = GolProcess.Direction.UP
+        direction = Direction.UP
 
         async with self.create_neighbor() as neighbor:
             with self.create_process([[8, 9]]) as process:
