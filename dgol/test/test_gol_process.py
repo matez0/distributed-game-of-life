@@ -122,16 +122,18 @@ class TestGolProcess(IsolatedAsyncioTestCase):
         direction_1 = Direction.UP
         direction_2 = Direction.RIGHT
 
-        def assert_received_border_from(direction):
-            async def assert_received_border(reader, writer):
+        def save_received_border(neighbor):
+            async def _save_received_border(reader, writer):
                 with closing(writer):
-                    self.assertEqual(await StreamSerializer.recv(reader), {direction.opposite.name: "border"})
+                    # We cannot do assertion here because the callback handler of StreamReaderProtocol
+                    # does not let the assertion to propagate to the test framework.
+                    neighbor.received_border = await StreamSerializer.recv(reader)
 
-            return assert_received_border
+            neighbor.receive_border.side_effect = _save_received_border
 
         async with self.create_neighbor() as neighbor_1, self.create_neighbor() as neighbor_2:
-            neighbor_1.receive_border.side_effect = assert_received_border_from(direction_1)
-            neighbor_2.receive_border.side_effect = assert_received_border_from(direction_2)
+            save_received_border(neighbor_1)
+            save_received_border(neighbor_2)
 
             with self.create_process([[0]]) as process:
                 process.connect(neighbor_1, direction_1)
@@ -140,6 +142,8 @@ class TestGolProcess(IsolatedAsyncioTestCase):
                 await self.send_border_to(process, {"LEFT": "border"})
                 await self.send_border_to(process, {"RIGHT": "border"})
 
+            self.assertEqual(neighbor_1.received_border, {direction_1.opposite.name: "border"})
+            self.assertEqual(neighbor_2.received_border, {direction_2.opposite.name: "border"})
             neighbor_1.receive_border.assert_awaited_once()
             neighbor_2.receive_border.assert_awaited_once()
 
