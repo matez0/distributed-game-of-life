@@ -51,8 +51,8 @@ class GolProcess(Process):
     async def _receive_border(self, reader: StreamReader, writer: StreamWriter) -> None:
         self.neighbor_borders.update(
             {
-                Direction[direction]: border_info
-                for direction, border_info in (await StreamSerializer.recv(reader)).items()
+                Direction[direction]: border_cells
+                for direction, border_cells in (await StreamSerializer.recv(reader)).items()
             }
         )
 
