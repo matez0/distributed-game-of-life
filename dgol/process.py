@@ -76,7 +76,7 @@ class GolProcess(Process):
         for direction, border_port in self.neighbors.items():
             _, writer = await asyncio.open_connection(self.host, border_port)
 
-            await StreamSerializer.send(writer, {direction.opposite.name: "border"})
+            await StreamSerializer.send(writer, {direction.opposite.name: self._cells.border_at(direction)})
 
             writer.close()
             await writer.wait_closed()

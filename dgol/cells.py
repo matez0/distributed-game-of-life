@@ -72,3 +72,14 @@ class GolCells:
             for _row in range(row - 1, row + 2)
             for _column in range(column - 1, column + 2) if _column != column or _row != row
         )
+
+    def border_at(self, direction: Direction) -> list[int]:
+        match direction:
+            case Direction.UP: return self._cells[0]
+            case Direction.UPRIGHT: return self._cells[0][-1:]
+            case Direction.RIGHT: return [row[-1] for row in self._cells]
+            case Direction.DOWNRIGHT: return self._cells[-1][-1:]
+            case Direction.DOWN: return self._cells[-1]
+            case Direction.DOWNLEFT: return self._cells[-1][:1]
+            case Direction.LEFT: return [row[0] for row in self._cells]
+            case Direction.UPLEFT: return self._cells[0][:1]

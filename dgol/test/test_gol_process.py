@@ -16,6 +16,9 @@ class GolCellsStubToGetIteration:
     def iterate(self) -> None:
         self.iteration_counter += 1
 
+    def border_at(self, direction: Direction) -> list[int]:
+        return [0]
+
     @property
     def as_serializable(self) -> list[list[int]]:
         return [[self.iteration_counter]]
@@ -118,9 +121,17 @@ class TestGolProcess(IsolatedAsyncioTestCase):
                 self.assertEqual(direction.opposite, opposite)
                 self.assertEqual(opposite.opposite, direction)
 
-    async def test_receiving_border_info_triggers_sending_border_once(self):
+    @patch("dgol.process.GolCells", spec=True)
+    async def test_receiving_border_info_triggers_sending_border_once(self, gol_cells_ctor: Mock):
         direction_1 = Direction.UP
+        border_1 = "upper-border"
         direction_2 = Direction.RIGHT
+        border_2 = "right-border"
+
+        def border_at(direction: Direction) -> Any:
+            return {direction_1: border_1, direction_2: border_2}[direction]
+
+        gol_cells_ctor.return_value = Mock(border_at=border_at)
 
         def save_received_border(neighbor):
             async def _save_received_border(reader, writer):
@@ -142,8 +153,8 @@ class TestGolProcess(IsolatedAsyncioTestCase):
                 await self.send_border_to(process, {"LEFT": "border"})
                 await self.send_border_to(process, {"RIGHT": "border"})
 
-            self.assertEqual(neighbor_1.received_border, {direction_1.opposite.name: "border"})
-            self.assertEqual(neighbor_2.received_border, {direction_2.opposite.name: "border"})
+            self.assertEqual(neighbor_1.received_border, {direction_1.opposite.name: border_at(direction_1)})
+            self.assertEqual(neighbor_2.received_border, {direction_2.opposite.name: border_at(direction_2)})
             neighbor_1.receive_border.assert_awaited_once()
             neighbor_2.receive_border.assert_awaited_once()
 

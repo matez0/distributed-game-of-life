@@ -158,3 +158,25 @@ class TestGolCells(TestCase):
                 cells.iterate(neighboring_borders=neighboring_borders)
 
                 self.assertEqual(cells.as_serializable, iterated_cells)
+
+    def test_border_cells_can_be_retrieved(self):
+        cells = GolCells(
+            [
+                [1, 2, 3],
+                [4, 5, 6],
+                [7, 8, 9],
+            ]
+        )
+
+        for direction, border_cells in {
+            Direction.UP: [1, 2, 3],
+            Direction.UPRIGHT: [3],
+            Direction.RIGHT: [3, 6, 9],
+            Direction.DOWNRIGHT: [9],
+            Direction.DOWN: [7, 8, 9],
+            Direction.DOWNLEFT: [7],
+            Direction.LEFT: [1, 4, 7],
+            Direction.UPLEFT: [1],
+        }.items():
+            with self.subTest(direction=direction):
+                self.assertEqual(cells.border_at(direction), border_cells)
