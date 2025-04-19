@@ -197,3 +197,31 @@ class TestGolProcess(IsolatedAsyncioTestCase):
                 self.assertEqual(await process.cells(), [[2]])
 
             self.assertEqual(neighbor.receive_border.await_count, 2)
+
+    @patch("dgol.process.GolCells", spec=True)
+    async def test_wait_for_iteration_before_setting_again_the_same_border_info(self, gol_cells_ctor: Mock):
+        gol_cells_ctor.return_value = GolCellsStubToGetIteration()
+
+        direction_1 = Direction.UP
+        direction_2 = Direction.RIGHT
+
+        async with self.create_neighbor() as neighbor_1, self.create_neighbor() as neighbor_2:
+            with self.create_process([[8, 9]]) as process:
+                process.connect(neighbor_1, direction_1)
+                process.connect(neighbor_2, direction_2)
+
+                await self.send_border_to(process, {direction_1.name: "border"})
+
+                send_border_again = asyncio.create_task(self.send_border_to(process, {direction_1.name: "border"}))
+
+                with self.assertRaises(TimeoutError):
+                    await asyncio.wait_for(asyncio.shield(send_border_again), timeout=.1)
+
+                await self.send_border_to(process, {direction_2.name: "border"})  # Trigger iteration.
+
+                self.assertEqual(await process.cells(), [[1]])
+
+                await send_border_again
+
+                self.assertEqual(neighbor_1.receive_border.await_count, 2)
+                self.assertEqual(neighbor_2.receive_border.await_count, 2)

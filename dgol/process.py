@@ -21,6 +21,7 @@ class GolProcess(Process):
         self._cells = GolCells(cells or [[]])
         self.cells_server_started = Event()
 
+        self.has_iterated = asyncio.Condition()
         self.is_border_sent = False
 
         self.start()
@@ -49,12 +50,13 @@ class GolProcess(Process):
             task_group.create_task(cells_server.serve_forever())
 
     async def _receive_border(self, reader: StreamReader, writer: StreamWriter) -> None:
-        self.neighbor_borders.update(
-            {
-                Direction[direction]: border_cells
-                for direction, border_cells in (await StreamSerializer.recv(reader)).items()
-            }
-        )
+        (direction, border_cells), *_ = (await StreamSerializer.recv(reader)).items()
+
+        async with self.has_iterated:
+            if Direction[direction] in self.neighbor_borders:
+                await self.has_iterated.wait()
+
+        self.neighbor_borders[Direction[direction]] = border_cells
 
         if not self.is_border_sent:
             self.is_border_sent = True
@@ -64,8 +66,11 @@ class GolProcess(Process):
         if set(self.neighbor_borders.keys()) == set(self.neighbors.keys()):
             self._cells.iterate()
             self.iteration += 1
-            self.neighbor_borders = {}
             self.is_border_sent = False
+
+            async with self.has_iterated:
+                self.neighbor_borders = {}
+                self.has_iterated.notify_all()
 
         await StreamSerializer.send(writer, "received")
 
