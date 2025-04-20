@@ -256,3 +256,27 @@ class TestGolProcess(IsolatedAsyncioTestCase):
 
                 self.assertEqual(neighbor_1.receive_border.await_count, 2)
                 self.assertEqual(neighbor_2.receive_border.await_count, 2)
+
+    @patch("dgol.process.GolCells", spec=True)
+    async def test_iteration_of_connected_gol_processes_is_initiated_by_sending_border(self, gol_cells_ctor: Mock):
+        gol_cells_ctor.return_value = GolCellsStubToGetIteration()
+
+        direction = Direction.UP
+
+        async with self.create_neighbor() as neighbor:
+            with self.create_process([[8, 9]]) as process:
+                process.connect(neighbor, direction)
+
+                async def receive_border(reader, writer) -> None:
+                    await StreamSerializer.recv(reader)
+
+                    await self.send_border_to(process, {direction.name: "border"})  # Trigger iteration.
+
+                    writer.close()
+                    await writer.wait_closed()
+
+                neighbor.receive_border.side_effect = receive_border
+
+                self.assertEqual(await process.cells(iteration=1), [[1]])  # Shall send border to neighbor.
+
+                neighbor.receive_border.assert_awaited_once()

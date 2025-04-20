@@ -74,9 +74,9 @@ class GolProcess(Process):
         if set(self.neighbor_borders.keys()) == set(self.neighbors.keys()):
             self._cells.iterate()
             self.iteration += 1
-            self.is_border_sent = False
 
             async with self.has_iterated:
+                self.is_border_sent = False
                 self.neighbor_borders = {}
                 self.has_iterated.notify_all()
 
@@ -106,8 +106,18 @@ class GolProcess(Process):
 
         if iteration:
             while self.iteration < iteration:
-                self._cells.iterate()
-                self.iteration += 1
+                if self.neighbors:
+                    if not self.is_border_sent:
+                        self.is_border_sent = True
+
+                        await self._send_border()
+
+                    async with self.has_iterated:
+                        if self.is_border_sent:
+                            await self.has_iterated.wait()
+                else:
+                    self._cells.iterate()
+                    self.iteration += 1
 
         await StreamSerializer.send(writer, self._cells.as_serializable)
 
