@@ -63,6 +63,9 @@ class GolProcess(Process):
 
         self.neighbor_borders[Direction[direction]] = border_cells
 
+        writer.close()
+        await writer.wait_closed()
+
         if not self.is_border_sent:
             self.is_border_sent = True
 
@@ -76,11 +79,6 @@ class GolProcess(Process):
             async with self.has_iterated:
                 self.neighbor_borders = {}
                 self.has_iterated.notify_all()
-
-        await StreamSerializer.send(writer, "received")
-
-        writer.close()
-        await writer.wait_closed()
 
     async def _send_border(self) -> None:
         for direction, border_port in self.neighbors.items():

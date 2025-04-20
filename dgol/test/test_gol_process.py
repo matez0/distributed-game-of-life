@@ -36,22 +36,46 @@ class TestGolProcess(IsolatedAsyncioTestCase):
 
     @asynccontextmanager
     async def create_neighbor(self) -> AsyncGenerator[AsyncMock, None]:
-        def close_writer(reader, writer):
+        def receive_border_cb(callback):
+            async def _receive_border_cb(reader, writer):
+                await callback(reader, writer)
+                async with neighbor._receive_border_called:
+                    neighbor._receive_border_called.notify_all()
+
+            return _receive_border_cb
+
+        @receive_border_cb
+        async def close_writer(reader, writer):
             writer.close()
 
-        neighbor = AsyncMock(spec=GolProcess, receive_border=AsyncMock(side_effect=close_writer), host="127.0.0.1")
+        async def receive_border_called():
+            async with neighbor._receive_border_called:
+                await neighbor._receive_border_called.wait()
+
+        neighbor = AsyncMock(
+            spec=GolProcess,
+            receive_border=AsyncMock(side_effect=close_writer),
+            host="127.0.0.1",
+            _receive_border_called=asyncio.Condition(),
+            receive_border_called=asyncio.create_task(receive_border_called()),
+            receive_border_cb=receive_border_cb,
+        )
 
         async with await asyncio.start_server(neighbor.receive_border, neighbor.host, 0) as border_server:
             neighbor.border_port = border_server.sockets[0].getsockname()[1]
 
             yield neighbor
 
+    @staticmethod
+    async def wait_for_receive_border_called(neighbor: AsyncMock):
+        await asyncio.wait_for(neighbor.receive_border_called, timeout=2)
+
     async def send_border_to(self, process: GolProcess, border: dict[str, Any]) -> None:
         reader, writer = await asyncio.open_connection(process.host, process.border_port.value)
 
         await StreamSerializer.send(writer, border)
 
-        self.assertEqual(await StreamSerializer.recv(reader), "received")
+        await reader.read()  # Wait for the other side has closed.
 
         writer.close()
         await writer.wait_closed()
@@ -134,6 +158,7 @@ class TestGolProcess(IsolatedAsyncioTestCase):
         gol_cells_ctor.return_value = Mock(border_at=border_at)
 
         def save_received_border(neighbor):
+            @neighbor.receive_border_cb
             async def _save_received_border(reader, writer):
                 with closing(writer):
                     # We cannot do assertion here because the callback handler of StreamReaderProtocol
@@ -152,6 +177,9 @@ class TestGolProcess(IsolatedAsyncioTestCase):
 
                 await self.send_border_to(process, {"LEFT": "border"})
                 await self.send_border_to(process, {"RIGHT": "border"})
+
+                await self.wait_for_receive_border_called(neighbor_1)
+                await self.wait_for_receive_border_called(neighbor_2)
 
             self.assertEqual(neighbor_1.received_border, {direction_1.opposite.name: border_at(direction_1)})
             self.assertEqual(neighbor_2.received_border, {direction_2.opposite.name: border_at(direction_2)})
