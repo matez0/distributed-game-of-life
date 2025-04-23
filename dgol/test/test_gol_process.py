@@ -186,10 +186,8 @@ class TestGolProcess(IsolatedAsyncioTestCase):
             neighbor_1.receive_border.assert_awaited_once()
             neighbor_2.receive_border.assert_awaited_once()
 
-    @patch("dgol.process.GolCells", spec=True)
-    async def test_receiving_border_info_from_all_neighbor_triggers_iteration(self, gol_cells_ctor: Mock):
-        gol_cells_ctor.return_value = GolCellsStubToGetIteration()
-
+    @patch("dgol.process.GolCells", new=Mock(return_value=GolCellsStubToGetIteration()))
+    async def test_receiving_border_info_from_all_neighbor_triggers_iteration(self):
         direction_1 = Direction.UP
         direction_2 = Direction.RIGHT
 
@@ -209,10 +207,8 @@ class TestGolProcess(IsolatedAsyncioTestCase):
 
                 self.assertEqual(await wait_for_iteration, [[1]])
 
-    @patch("dgol.process.GolCells", spec=True)
-    async def test_sending_border_can_be_triggered_again_after_iteration(self, gol_cells_ctor: Mock):
-        gol_cells_ctor.return_value = GolCellsStubToGetIteration()
-
+    @patch("dgol.process.GolCells", new=Mock(return_value=GolCellsStubToGetIteration()))
+    async def test_sending_border_can_be_triggered_again_after_iteration(self):
         direction = Direction.UP
 
         async with self.create_neighbor() as neighbor:
@@ -229,10 +225,8 @@ class TestGolProcess(IsolatedAsyncioTestCase):
 
             self.assertEqual(neighbor.receive_border.await_count, 2)
 
-    @patch("dgol.process.GolCells", spec=True)
-    async def test_wait_for_iteration_before_setting_again_the_same_border_info(self, gol_cells_ctor: Mock):
-        gol_cells_ctor.return_value = GolCellsStubToGetIteration()
-
+    @patch("dgol.process.GolCells", new=Mock(return_value=GolCellsStubToGetIteration()))
+    async def test_wait_for_iteration_before_setting_again_the_same_border_info(self):
         direction_1 = Direction.UP
         direction_2 = Direction.RIGHT
 
@@ -257,10 +251,8 @@ class TestGolProcess(IsolatedAsyncioTestCase):
                 self.assertEqual(neighbor_1.receive_border.await_count, 2)
                 self.assertEqual(neighbor_2.receive_border.await_count, 2)
 
-    @patch("dgol.process.GolCells", spec=True)
-    async def test_iteration_of_connected_gol_processes_is_initiated_by_sending_border(self, gol_cells_ctor: Mock):
-        gol_cells_ctor.return_value = GolCellsStubToGetIteration()
-
+    @patch("dgol.process.GolCells", new=Mock(return_value=GolCellsStubToGetIteration()))
+    async def test_iteration_of_connected_gol_processes_is_initiated_by_sending_border(self):
         direction = Direction.UP
 
         async with self.create_neighbor() as neighbor:
