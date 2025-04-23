@@ -25,8 +25,9 @@ class GolCellsStubToGetIteration:
 
 
 class TestGolProcess(IsolatedAsyncioTestCase):
+    @staticmethod
     @contextmanager
-    def create_process(self, cells: Optional[Any] = None) -> Generator[GolProcess, None, None]:
+    def create_process(cells: Optional[Any] = None) -> Generator[GolProcess, None, None]:
         process = GolProcess(cells)
         try:
             yield process
@@ -34,8 +35,9 @@ class TestGolProcess(IsolatedAsyncioTestCase):
         finally:
             process.terminate()
 
+    @staticmethod
     @asynccontextmanager
-    async def create_neighbor(self) -> AsyncGenerator[AsyncMock, None]:
+    async def create_neighbor() -> AsyncGenerator[AsyncMock, None]:
         def receive_border_cb(callback):
             async def _receive_border_cb(reader, writer):
                 await callback(reader, writer)
@@ -70,7 +72,8 @@ class TestGolProcess(IsolatedAsyncioTestCase):
     async def wait_for_receive_border_called(neighbor: AsyncMock):
         await asyncio.wait_for(neighbor.receive_border_called, timeout=2)
 
-    async def send_border_to(self, process: GolProcess, border: dict[str, Any]) -> None:
+    @staticmethod
+    async def send_border_to(process: GolProcess, border: dict[str, Any]) -> None:
         reader, writer = await asyncio.open_connection(process.host, process.border_port.value)
 
         await StreamSerializer.send(writer, border)
