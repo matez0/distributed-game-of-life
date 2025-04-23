@@ -155,7 +155,7 @@ class TestGolProcess(IsolatedAsyncioTestCase):
         def border_at(direction: Direction) -> Any:
             return {direction_1: border_1, direction_2: border_2}[direction]
 
-        gol_cells_ctor.return_value = Mock(border_at=border_at)
+        gol_cells_ctor.return_value.border_at.side_effect = border_at
 
         def save_received_border(neighbor):
             @neighbor.receive_border_cb
