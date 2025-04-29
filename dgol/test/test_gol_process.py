@@ -40,15 +40,16 @@ class TestGolProcess(IsolatedAsyncioTestCase):
     async def create_neighbor() -> AsyncGenerator[AsyncMock, None]:
         def receive_border_cb(callback):
             async def _receive_border_cb(reader, writer):
-                await callback(reader, writer)
+                with closing(writer):
+                    await callback(reader, writer)
                 async with neighbor._receive_border_called:
                     neighbor._receive_border_called.notify_all()
 
             return _receive_border_cb
 
         @receive_border_cb
-        async def close_writer(reader, writer):
-            writer.close()
+        async def ignore(reader, writer):
+            pass
 
         async def receive_border_called():
             async with neighbor._receive_border_called:
@@ -56,7 +57,7 @@ class TestGolProcess(IsolatedAsyncioTestCase):
 
         neighbor = AsyncMock(
             spec=GolProcess,
-            receive_border=AsyncMock(side_effect=close_writer),
+            receive_border=AsyncMock(side_effect=ignore),
             host="127.0.0.1",
             _receive_border_called=asyncio.Condition(),
             receive_border_called=asyncio.create_task(receive_border_called()),
@@ -163,10 +164,9 @@ class TestGolProcess(IsolatedAsyncioTestCase):
         def save_received_border(neighbor):
             @neighbor.receive_border_cb
             async def _save_received_border(reader, writer):
-                with closing(writer):
-                    # We cannot do assertion here because the callback handler of StreamReaderProtocol
-                    # does not let the assertion to propagate to the test framework.
-                    neighbor.received_border = await StreamSerializer.recv(reader)
+                # We cannot do assertion here because the callback handler of StreamReaderProtocol
+                # does not let the assertion to propagate to the test framework.
+                neighbor.received_border = await StreamSerializer.recv(reader)
 
             neighbor.receive_border.side_effect = _save_received_border
 
