@@ -81,13 +81,17 @@ class GolProcess(Process):
                 self.has_iterated.notify_all()
 
     async def _send_border(self) -> None:
-        for direction, border_port in self.neighbors.items():
-            _, writer = await asyncio.open_connection(self.host, border_port)
+        async with asyncio.TaskGroup() as task_group:
+            for direction, border_port in self.neighbors.items():
+                task_group.create_task(self._send_border_to(direction, border_port))
 
-            await StreamSerializer.send(writer, {direction.opposite.name: self._cells.border_at(direction)})
+    async def _send_border_to(self, direction: Direction, border_port: Any) -> None:
+        reader, writer = await asyncio.open_connection(self.host, border_port)
 
-            writer.close()
-            await writer.wait_closed()
+        await StreamSerializer.send(writer, {direction.opposite.name: self._cells.border_at(direction)})
+
+        writer.close()
+        await writer.wait_closed()
 
     async def _wait_for_cells(self, reader: StreamReader, writer: StreamWriter) -> None:
         iteration = await StreamSerializer.recv(reader)
