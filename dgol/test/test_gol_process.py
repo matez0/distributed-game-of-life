@@ -75,7 +75,7 @@ class TestGolProcess(IsolatedAsyncioTestCase):
 
     @staticmethod
     async def send_border_to(process: GolProcess, border: dict[str, Any]) -> None:
-        reader, writer = await asyncio.open_connection(process.host, process.border_port.value)
+        reader, writer = await asyncio.open_connection(process.host, process.border_port)
 
         await StreamSerializer.send(writer, border)
 

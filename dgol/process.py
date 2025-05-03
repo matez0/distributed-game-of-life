@@ -14,7 +14,7 @@ class GolProcess(Process):
         self.host = "127.0.0.1"
         self.cells_server_port = Value("i", 0)
         self.wait_for_cells_server_port = Value("i", 0)
-        self.border_port = Value("i", 0)
+        self._border_port = Value("i", 0)
         self.neighbors = Manager().dict()
         self.neighbor_borders: dict[Direction, list[list[int]]] = {}
 
@@ -28,11 +28,13 @@ class GolProcess(Process):
         self.start()
         self.cells_server_started.wait()
 
+        self.border_port = self._border_port.value
+
     def connect(self, other: Self, direction: Direction):
         self._add_neighbor(direction, other.border_port)
         other._add_neighbor(direction.opposite, self.border_port)
 
-    def _add_neighbor(self, direction: Direction, border_port: Any) -> None:
+    def _add_neighbor(self, direction: Direction, border_port: int) -> None:
         self.neighbors[direction] = border_port
 
     def run(self) -> None:
@@ -40,7 +42,7 @@ class GolProcess(Process):
 
     async def arun(self) -> None:
         border_server = await asyncio.start_server(self._receive_border, self.host, 0)
-        self.border_port.value = border_server.sockets[0].getsockname()[1]
+        self._border_port.value = border_server.sockets[0].getsockname()[1]
 
         wait_for_cells_server = await asyncio.start_server(self._wait_for_cells, self.host, 0)
         self.wait_for_cells_server_port.value = wait_for_cells_server.sockets[0].getsockname()[1]
@@ -85,7 +87,7 @@ class GolProcess(Process):
             for direction, border_port in self.neighbors.items():
                 task_group.create_task(self._send_border_to(direction, border_port))
 
-    async def _send_border_to(self, direction: Direction, border_port: Any) -> None:
+    async def _send_border_to(self, direction: Direction, border_port: int) -> None:
         reader, writer = await asyncio.open_connection(self.host, border_port)
 
         await StreamSerializer.send(writer, {direction.opposite.name: self._cells.border_at(direction)})
