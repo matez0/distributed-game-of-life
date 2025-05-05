@@ -13,7 +13,7 @@ from dgol.stream import StreamSerializer
 class GolCellsStubToGetIteration:
     iteration_counter = 0
 
-    def iterate(self) -> None:
+    def iterate(self, neighbor_borders=None) -> None:
         self.iteration_counter += 1
 
     def border_at(self, direction: Direction) -> list[int]:
@@ -275,3 +275,54 @@ class TestGolProcess(IsolatedAsyncioTestCase):
                 self.assertEqual(await process.cells(iteration=1), [[1]])  # Shall send border to neighbor.
 
                 neighbor.receive_border.assert_awaited_once()
+
+    async def test_cells_of_connected_gol_processes_can_be_iterated(self):
+        cells_up = [
+            [0, 0, 0],
+            [0, 0, 0],
+            [1, 0, 1],
+        ]
+        cells = [
+            [0, 1, 0],
+            [0, 0, 0],
+            [0, 0, 1],
+        ]
+        cells_right = [
+            [1, 0, 0],
+            [0, 1, 0],
+            [0, 0, 0],
+        ]
+
+        with (
+            self.create_process(cells) as process,
+            self.create_process(cells_up) as process_up,
+            self.create_process(cells_right) as process_right
+        ):
+            process.connect(process_up, Direction.UP)
+            process.connect(process_right, Direction.RIGHT)
+            process_right.connect(process_up, Direction.UPLEFT)
+
+            self.assertEqual(
+                await process.cells(iteration=1),
+                [
+                    [0, 1, 1],
+                    [0, 0, 1],
+                    [0, 0, 0],
+                ],
+            )
+            self.assertEqual(
+                await process_up.wait_for_cells(iteration=1),
+                [
+                    [0, 0, 0],
+                    [0, 0, 0],
+                    [0, 1, 1],
+                ],
+            )
+            self.assertEqual(
+                await process_right.wait_for_cells(iteration=1),
+                [
+                    [1, 0, 0],
+                    [1, 0, 0],
+                    [0, 0, 0],
+                ],
+            )
