@@ -16,7 +16,7 @@ class GolProcess(Process):
         self.wait_for_cells_server_port = Value("i", 0)
         self._border_port = Value("i", 0)
         self.neighbors = Manager().dict()
-        self.neighbor_borders: dict[Direction, list[list[int]]] = {}
+        self.neighbor_borders: dict[Direction, list[int]] = {}
 
         self.iteration = 0
         self._cells = GolCells(cells or [[]])
