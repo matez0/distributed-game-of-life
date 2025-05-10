@@ -1,5 +1,4 @@
 import asyncio
-from asyncio import StreamReader, StreamWriter
 from multiprocessing import Event, Manager, Process, Value
 from typing import Any, Self, cast
 
@@ -56,8 +55,9 @@ class GolProcess(Process):
             task_group.create_task(wait_for_cells_server.serve_forever())
             task_group.create_task(cells_server.serve_forever())
 
-    async def _receive_border(self, reader: StreamReader, writer: StreamWriter) -> None:
-        (direction, border_cells), *_ = (await StreamSerializer.recv(reader)).items()
+    @StreamSerializer.callback
+    async def _receive_border(self, stream: StreamSerializer) -> None:
+        (direction, border_cells), *_ = (await stream.recv()).items()
 
         async with self.has_iterated:
             if Direction[direction] in self.neighbor_borders:
@@ -66,8 +66,7 @@ class GolProcess(Process):
         iteration = self.iteration
         self.neighbor_borders[Direction[direction]] = border_cells
 
-        writer.close()
-        await writer.wait_closed()
+        await stream.aclose()
 
         if iteration < self.iteration:
             return  # The iteration already happened with this border during waiting for closed.
@@ -92,27 +91,23 @@ class GolProcess(Process):
                 task_group.create_task(self._send_border_to(direction, border_port))
 
     async def _send_border_to(self, direction: Direction, border_port: int) -> None:
-        reader, writer = await asyncio.open_connection(self.host, border_port)
+        async with StreamSerializer.connect(self.host, border_port) as stream:
 
-        await StreamSerializer.send(writer, {direction.opposite.name: self._cells.border_at(direction)})
+            await stream.send({direction.opposite.name: self._cells.border_at(direction)})
 
-        writer.close()
-        await writer.wait_closed()
-
-    async def _wait_for_cells(self, reader: StreamReader, writer: StreamWriter) -> None:
-        iteration = await StreamSerializer.recv(reader)
+    @StreamSerializer.callback
+    async def _wait_for_cells(self, stream: StreamSerializer) -> None:
+        iteration = await stream.recv()
 
         async with self.has_iterated:
             while self.iteration < iteration:
                 await self.has_iterated.wait()
 
-        await StreamSerializer.send(writer, self._cells.as_serializable)
+        await stream.send(self._cells.as_serializable)
 
-        writer.close()
-        await writer.wait_closed()
-
-    async def _send_cells(self, reader: StreamReader, writer: StreamWriter) -> None:
-        iteration = await StreamSerializer.recv(reader)
+    @StreamSerializer.callback
+    async def _send_cells(self, stream: StreamSerializer) -> None:
+        iteration = await stream.recv()
 
         if iteration:
             while self.iteration < iteration:
@@ -129,25 +124,16 @@ class GolProcess(Process):
                     self._cells.iterate()
                     self.iteration += 1
 
-        await StreamSerializer.send(writer, self._cells.as_serializable)
-
-        writer.close()
-        await writer.wait_closed()
+        await stream.send(self._cells.as_serializable)
 
     async def cells(self, iteration: int | None = None) -> Any:
         return await self._request_cells(self.cells_server_port.value, iteration)
 
     async def _request_cells(self, server_port: int, iteration: int | None) -> Any:
-        reader, writer = await asyncio.open_connection(self.host, server_port)
+        async with StreamSerializer.connect(self.host, server_port) as stream:
+            await stream.send(iteration)
 
-        await StreamSerializer.send(writer, iteration)
-
-        result = await StreamSerializer.recv(reader)
-
-        writer.close()
-        await writer.wait_closed()
-
-        return result
+            return await stream.recv()
 
     async def wait_for_cells(self, iteration: int) -> Any:
         return await self._request_cells(self.wait_for_cells_server_port.value, iteration)
