@@ -1,5 +1,6 @@
 import asyncio
-from contextlib import asynccontextmanager, closing, contextmanager
+from contextlib import asynccontextmanager, contextmanager
+from functools import partial, wraps
 from multiprocessing import Process
 from typing import Any, AsyncGenerator, Generator, Optional
 from unittest import IsolatedAsyncioTestCase
@@ -39,16 +40,18 @@ class TestGolProcess(IsolatedAsyncioTestCase):
     @asynccontextmanager
     async def create_neighbor() -> AsyncGenerator[AsyncMock, None]:
         def receive_border_cb(callback):
-            async def _receive_border_cb(reader, writer):
-                with closing(writer):
-                    await callback(reader, writer)
+            @wraps(callback)
+            @StreamSerializer.callback
+            async def _receive_border_cb(_, stream):
+                await callback(stream)
+
                 async with neighbor._receive_border_called:
                     neighbor._receive_border_called.notify_all()
 
-            return _receive_border_cb
+            return partial(_receive_border_cb, None)
 
         @receive_border_cb
-        async def ignore(reader, writer):
+        async def ignore(stream):
             pass
 
         async def receive_border_called():
@@ -75,14 +78,10 @@ class TestGolProcess(IsolatedAsyncioTestCase):
 
     @staticmethod
     async def send_border_to(process: GolProcess, border: dict[str, Any]) -> None:
-        reader, writer = await asyncio.open_connection(process.host, process.border_port)
+        async with StreamSerializer.connect(process.host, process.border_port) as stream:
+            await stream.send(border)
 
-        await StreamSerializer.send(writer, border)
-
-        await reader.read()  # Wait for the other side has closed.
-
-        writer.close()
-        await writer.wait_closed()
+            await stream.reader.read()  # Wait for the other side has closed.
 
     def test_shall_be_a_process_instance(self):
         with self.create_process() as process:
@@ -163,10 +162,10 @@ class TestGolProcess(IsolatedAsyncioTestCase):
 
         def save_received_border(neighbor):
             @neighbor.receive_border_cb
-            async def _save_received_border(reader, writer):
+            async def _save_received_border(stream):
                 # We cannot do assertion here because the callback handler of StreamReaderProtocol
                 # does not let the assertion to propagate to the test framework.
-                neighbor.received_border = await StreamSerializer.recv(reader)
+                neighbor.received_border = await stream.recv()
 
             neighbor.receive_border.side_effect = _save_received_border
 
@@ -262,15 +261,13 @@ class TestGolProcess(IsolatedAsyncioTestCase):
             with self.create_process([[8, 9]]) as process:
                 process.connect(neighbor, direction)
 
-                async def receive_border(reader, writer) -> None:
-                    await StreamSerializer.recv(reader)
+                @StreamSerializer.callback
+                async def receive_border(_, stream) -> None:
+                    await stream.recv()
 
                     await self.send_border_to(process, {direction.name: "border"})  # Trigger iteration.
 
-                    writer.close()
-                    await writer.wait_closed()
-
-                neighbor.receive_border.side_effect = receive_border
+                neighbor.receive_border.side_effect = partial(receive_border, None)
 
                 self.assertEqual(await process.cells(iteration=1), [[1]])  # Shall send border to neighbor.
 
