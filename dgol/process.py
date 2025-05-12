@@ -40,14 +40,14 @@ class GolProcess(Process):
         asyncio.run(self.arun())
 
     async def arun(self) -> None:
-        border_server = await asyncio.start_server(self._receive_border, self.host, 0)
-        self._border_port.value = border_server.sockets[0].getsockname()[1]
+        border_server = await StreamSerializer.start_server(self._receive_border, self.host)
+        self._border_port.value = StreamSerializer.port_of(border_server)
 
-        wait_for_cells_server = await asyncio.start_server(self._wait_for_cells, self.host, 0)
-        self.wait_for_cells_server_port.value = wait_for_cells_server.sockets[0].getsockname()[1]
+        wait_for_cells_server = await StreamSerializer.start_server(self._wait_for_cells, self.host)
+        self.wait_for_cells_server_port.value = StreamSerializer.port_of(wait_for_cells_server)
 
-        cells_server = await asyncio.start_server(self._send_cells, self.host, 0)
-        self.cells_server_port.value = cells_server.sockets[0].getsockname()[1]
+        cells_server = await StreamSerializer.start_server(self._send_cells, self.host)
+        self.cells_server_port.value = StreamSerializer.port_of(cells_server)
         self.cells_server_started.set()
 
         async with asyncio.TaskGroup() as task_group:
@@ -55,7 +55,6 @@ class GolProcess(Process):
             task_group.create_task(wait_for_cells_server.serve_forever())
             task_group.create_task(cells_server.serve_forever())
 
-    @StreamSerializer.callback
     async def _receive_border(self, stream: StreamSerializer) -> None:
         (direction, border_cells), *_ = (await stream.recv()).items()
 
@@ -95,7 +94,6 @@ class GolProcess(Process):
 
             await stream.send({direction.opposite.name: self._cells.border_at(direction)})
 
-    @StreamSerializer.callback
     async def _wait_for_cells(self, stream: StreamSerializer) -> None:
         iteration = await stream.recv()
 
@@ -105,7 +103,6 @@ class GolProcess(Process):
 
         await stream.send(self._cells.as_serializable)
 
-    @StreamSerializer.callback
     async def _send_cells(self, stream: StreamSerializer) -> None:
         iteration = await stream.recv()
 

@@ -36,37 +36,18 @@ class TestStreamSerializer(IsolatedAsyncioTestCase):
             with self.assertRaises(ValueError):
                 await StreamSerializer(_reader, writer).send('d' * 0x10000)
 
-    async def test_callback_passes_an_instance_to_method_and_handles_closing(self):
-        method_arg = Mock(value=None)
-
-        class Example:
-            @StreamSerializer.callback
-            async def method(self, stream: StreamSerializer) -> None:
-                method_arg.value = stream
-
-        reader = AsyncMock(spec=asyncio.StreamReader)
-        writer = AsyncMock(spec=asyncio.StreamWriter)
-
-        await Example().method(reader, writer)
-
-        self.assertIsInstance(method_arg.value, StreamSerializer)
-
-        writer.close.assert_called_once_with()
-        writer.wait_closed.assert_awaited_once_with()
-
     async def test_can_communicate_with_a_server(self):
         class Server:
-            @StreamSerializer.callback
             async def echo(self, stream):
                 await stream.send(await stream.recv())
 
         host = "127.0.0.1"
 
-        async with await asyncio.start_server(Server().echo, host, 0) as server:
-            port = server.sockets[0].getsockname()[1]
+        async with (
+            await StreamSerializer.start_server(Server().echo, host) as server,
+            StreamSerializer.connect(host, StreamSerializer.port_of(server)) as stream
+        ):
+            data = "my-data"
+            await stream.send(data)
 
-            async with StreamSerializer.connect(host, port) as stream:
-                data = "my-data"
-                await stream.send(data)
-
-                self.assertEqual(await stream.recv(), data)
+            self.assertEqual(await stream.recv(), data)

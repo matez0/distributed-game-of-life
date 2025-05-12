@@ -21,16 +21,24 @@ class StreamSerializer:
         await self.aclose()
 
     @classmethod
-    def callback(
+    async def start_server(cls, callback: Callable[[Self], Awaitable[None]], host: str) -> asyncio.Server:
+        return await asyncio.start_server(cls._asyncio_callback(callback), host, 0)
+
+    @classmethod
+    def _asyncio_callback(
         cls,
-        method: Callable[[Any, Self], Awaitable[None]],
-    ) -> Callable[[Any, StreamReader, StreamWriter], Awaitable[None]]:
-        @wraps(method)
-        async def _callback(self: Any, reader: StreamReader, writer: StreamWriter) -> None:
+        func: Callable[[Self], Awaitable[None]],
+    ) -> Callable[[StreamReader, StreamWriter], Awaitable[None]]:
+        @wraps(func)
+        async def _callback(reader: StreamReader, writer: StreamWriter) -> None:
             async with cls(reader, writer) as stream:
-                await method(self, stream)
+                await func(stream)
 
         return _callback
+
+    @staticmethod
+    def port_of(server: asyncio.Server) -> int:
+        return server.sockets[0].getsockname()[1]
 
     @classmethod
     @asynccontextmanager

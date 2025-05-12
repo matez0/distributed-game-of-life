@@ -1,6 +1,6 @@
 import asyncio
 from contextlib import asynccontextmanager, contextmanager
-from functools import partial, wraps
+from functools import wraps
 from multiprocessing import Process
 from typing import Any, AsyncGenerator, Generator, Optional
 from unittest import IsolatedAsyncioTestCase
@@ -41,14 +41,13 @@ class TestGolProcess(IsolatedAsyncioTestCase):
     async def create_neighbor() -> AsyncGenerator[AsyncMock, None]:
         def receive_border_cb(callback):
             @wraps(callback)
-            @StreamSerializer.callback
-            async def _receive_border_cb(_, stream):
+            async def _receive_border_cb(stream):
                 await callback(stream)
 
                 async with neighbor._receive_border_called:
                     neighbor._receive_border_called.notify_all()
 
-            return partial(_receive_border_cb, None)
+            return _receive_border_cb
 
         @receive_border_cb
         async def ignore(stream):
@@ -67,8 +66,8 @@ class TestGolProcess(IsolatedAsyncioTestCase):
             receive_border_cb=receive_border_cb,
         )
 
-        async with await asyncio.start_server(neighbor.receive_border, neighbor.host, 0) as border_server:
-            neighbor.border_port = border_server.sockets[0].getsockname()[1]
+        async with await StreamSerializer.start_server(neighbor.receive_border, neighbor.host) as border_server:
+            neighbor.border_port = StreamSerializer.port_of(border_server)
 
             yield neighbor
 
@@ -261,13 +260,12 @@ class TestGolProcess(IsolatedAsyncioTestCase):
             with self.create_process([[8, 9]]) as process:
                 process.connect(neighbor, direction)
 
-                @StreamSerializer.callback
-                async def receive_border(_, stream) -> None:
+                async def receive_border(stream) -> None:
                     await stream.recv()
 
                     await self.send_border_to(process, {direction.name: "border"})  # Trigger iteration.
 
-                neighbor.receive_border.side_effect = partial(receive_border, None)
+                neighbor.receive_border.side_effect = receive_border
 
                 self.assertEqual(await process.cells(iteration=1), [[1]])  # Shall send border to neighbor.
 
