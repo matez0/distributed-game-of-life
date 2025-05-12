@@ -1,6 +1,6 @@
 import asyncio
 from multiprocessing import Event, Manager, Process, Value
-from typing import Any, Self, cast
+from typing import Any, Self
 
 from dgol.cells import Direction, GolCells
 from dgol.stream import StreamSerializer

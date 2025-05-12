@@ -1,6 +1,6 @@
 import asyncio
 from asyncio import TaskGroup
-from contextlib import aclosing, closing
+from contextlib import closing
 from socket import socketpair
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock, Mock
