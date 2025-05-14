@@ -5,10 +5,10 @@ from socket import socketpair
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock, Mock
 
-from dgol.stream import StreamSerializer
+from dgol.connection import Connection
 
 
-class TestStreamSerializer(IsolatedAsyncioTestCase):
+class TestConnection(IsolatedAsyncioTestCase):
     async def test_sent_data_can_be_received(self):
         sock_1, sock_2 = socketpair()
         _reader, writer = await asyncio.open_connection(sock=sock_1)
@@ -17,8 +17,8 @@ class TestStreamSerializer(IsolatedAsyncioTestCase):
         data = 'data-to-send'
 
         with closing(writer), closing(_writer):
-            receiver = StreamSerializer(reader, _writer)
-            sender = StreamSerializer(_reader, writer)
+            receiver = Connection(reader, _writer)
+            sender = Connection(_reader, writer)
 
             async with TaskGroup() as task_group:
                 receiver_task = task_group.create_task(receiver.recv())
@@ -34,20 +34,20 @@ class TestStreamSerializer(IsolatedAsyncioTestCase):
 
         with closing(writer), closing(_writer):
             with self.assertRaises(ValueError):
-                await StreamSerializer(_reader, writer).send('d' * 0x10000)
+                await Connection(_reader, writer).send('d' * 0x10000)
 
     async def test_can_communicate_with_a_server(self):
         class Server:
-            async def echo(self, stream):
-                await stream.send(await stream.recv())
+            async def echo(self, connection):
+                await connection.send(await connection.recv())
 
         host = "127.0.0.1"
 
         async with (
-            await StreamSerializer.start_server(Server().echo, host) as server,
-            StreamSerializer.connect(host, StreamSerializer.port_of(server)) as stream
+            await Connection.start_server(Server().echo, host) as server,
+            Connection.connect(host, Connection.port_of(server)) as connection
         ):
             data = "my-data"
-            await stream.send(data)
+            await connection.send(data)
 
-            self.assertEqual(await stream.recv(), data)
+            self.assertEqual(await connection.recv(), data)

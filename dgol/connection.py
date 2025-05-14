@@ -7,7 +7,7 @@ from functools import wraps
 from typing import Any, Self
 
 
-class StreamSerializer:
+class Connection:
     DIGITS_OF_ENCODED_DATA_LENGTH = 4
 
     def __init__(self, reader: StreamReader, writer: StreamWriter):
@@ -31,8 +31,8 @@ class StreamSerializer:
     ) -> Callable[[StreamReader, StreamWriter], Awaitable[None]]:
         @wraps(func)
         async def _callback(reader: StreamReader, writer: StreamWriter) -> None:
-            async with cls(reader, writer) as stream:
-                await func(stream)
+            async with cls(reader, writer) as connection:
+                await func(connection)
 
         return _callback
 
@@ -45,8 +45,8 @@ class StreamSerializer:
     async def connect(cls, host: str, port: int) -> AsyncGenerator[Self]:
         reader, writer = await asyncio.open_connection(host, port)
 
-        async with cls(reader, writer) as stream:
-            yield stream
+        async with cls(reader, writer) as connection:
+            yield connection
 
     async def aclose(self) -> None:
         self.writer.close()
