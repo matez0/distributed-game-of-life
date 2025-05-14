@@ -62,6 +62,7 @@ class TestGolProcess(IsolatedAsyncioTestCase):
             receive_border=AsyncMock(side_effect=ignore),
             host="127.0.0.1",
             _receive_border_called=asyncio.Condition(),
+            receive_border_called_coro_factory=receive_border_called,
             receive_border_called=asyncio.create_task(receive_border_called()),
             receive_border_cb=receive_border_cb,
         )
@@ -72,15 +73,15 @@ class TestGolProcess(IsolatedAsyncioTestCase):
             yield neighbor
 
     @staticmethod
-    async def wait_for_receive_border_called(neighbor: AsyncMock):
-        await asyncio.wait_for(neighbor.receive_border_called, timeout=2)
+    async def wait_for_receive_border_called(neighbor: AsyncMock, timeout=2):
+        await asyncio.wait_for(asyncio.shield(neighbor.receive_border_called), timeout=timeout)
+
+        neighbor.receive_border_called = asyncio.create_task(neighbor.receive_border_called_coro_factory())
 
     @staticmethod
     async def send_border_to(process: GolProcess, border: dict[str, Any]) -> None:
         async with Connection.connect(process.host, process.border_port) as connection:
             await connection.send(border)
-
-            await connection.reader.read()  # Wait for the other side has closed.
 
     def test_shall_be_a_process_instance(self):
         with self.create_process() as process:
@@ -238,16 +239,19 @@ class TestGolProcess(IsolatedAsyncioTestCase):
 
                 await self.send_border_to(process, {direction_1.name: "border"})
 
-                send_border_again = asyncio.create_task(self.send_border_to(process, {direction_1.name: "border"}))
+                await self.wait_for_receive_border_called(neighbor_1)
+
+                await self.send_border_to(process, {direction_1.name: "border"})
 
                 with self.assertRaises(TimeoutError):
-                    await asyncio.wait_for(asyncio.shield(send_border_again), timeout=.1)
+                    # Border is sent to neighbors after receiving and storing any border info.
+                    await self.wait_for_receive_border_called(neighbor_1, timeout=.1)
 
                 await self.send_border_to(process, {direction_2.name: "border"})  # Trigger iteration.
 
                 self.assertEqual(await process.wait_for_cells(iteration=1), [[1]])
 
-                await send_border_again
+                await self.wait_for_receive_border_called(neighbor_1)
 
                 self.assertEqual(neighbor_1.receive_border.await_count, 2)
                 self.assertEqual(neighbor_2.receive_border.await_count, 2)

@@ -62,13 +62,7 @@ class GolProcess(Process):
             if Direction[direction] in self.neighbor_borders:
                 await self.has_iterated.wait()
 
-        iteration = self.iteration
         self.neighbor_borders[Direction[direction]] = border_cells
-
-        await connection.aclose()
-
-        if iteration < self.iteration:
-            return  # The iteration already happened with this border during waiting for closed.
 
         if not self.is_border_sent:
             self.is_border_sent = True
